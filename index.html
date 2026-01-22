@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Mobile Draw</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#111111">
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #111;
+  overflow: hidden;
+  touch-action: none;
+}
+
+#toolbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50px;
+  background: #222;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px;
+  z-index: 10;
+}
+
+#toolbar input, #toolbar button {
+  height: 40px;
+}
+
+canvas {
+  position: absolute;
+  top: 50px;
+  left: 0;
+}
+</style>
+</head>
+
+<body>
+
+<div id="toolbar">
+  <input type="color" id="color" value="#ffffff">
+  <input type="range" id="size" min="1" max="40" value="6">
+  <button id="eraser">E</button>
+  <button id="clear">C</button>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+// ===== SERVICE WORKER =====
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js");
+}
+
+// ===== CANVAS =====
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d", { desynchronized: true });
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight - 50;
+}
+resize();
+window.addEventListener("resize", resize);
+
+// ===== DRAW STATE =====
+let drawing = false;
+let lastX = 0;
+let lastY = 0;
+let erasing = false;
+
+const colorInput = document.getElementById("color");
+const sizeInput = document.getElementById("size");
+
+// ===== BUTTONS =====
+document.getElementById("eraser").onclick = () => erasing = !erasing;
+document.getElementById("clear").onclick = () => {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  save();
+};
+
+// ===== DRAW =====
+canvas.addEventListener("pointerdown", e => {
+  drawing = true;
+  lastX = e.offsetX;
+  lastY = e.offsetY;
+  ctx.beginPath();
+  ctx.moveTo(lastX, lastY);
+});
+
+canvas.addEventListener("pointermove", e => {
+  if (!drawing) return;
+
+  const p = e.pressure || 0.5;
+  ctx.lineWidth = sizeInput.value * p;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = colorInput.value;
+  ctx.globalCompositeOperation = erasing ? "destination-out" : "source-over";
+
+  ctx.lineTo(e.offsetX, e.offsetY);
+  ctx.stroke();
+
+  lastX = e.offsetX;
+  lastY = e.offsetY;
+
+  saveDebounced();
+});
+
+canvas.addEventListener("pointerup", () => drawing = false);
+canvas.addEventListener("pointercancel", () => drawing = false);
+
+// ===== AUTOSAVE =====
+let saveTimer;
+function saveDebounced() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(save, 800);
+}
+
+function save() {
+  localStorage.setItem("drawing", canvas.toDataURL());
+}
+
+function load() {
+  const data = localStorage.getItem("drawing");
+  if (!data) return;
+  const img = new Image();
+  img.onload = () => ctx.drawImage(img, 0, 0);
+  img.src = data;
+}
+load();
+</script>
+
+</body>
+  </html>
+    
